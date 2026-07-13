@@ -1,50 +1,36 @@
-import { Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, GatewayIntentBits, Partials } from "discord.js";
 import { env } from "./env.js";
-import { getCommands } from "./loadCommands.js";
+import { loadCommands } from "./handlers/commandHandler.js";
+import { loadEvents } from "./handlers/eventHandler.js";
 
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+async function main() {
+  const client = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+    partials: [Partials.User, Partials.GuildMember],
+  });
+
+  const commands = await loadCommands();
+  console.log(`[STARTUP] Loaded ${commands.size} slash command(s).`);
+
+  loadEvents(client);
+
+  await client.login(env.DISCORD_BOT_TOKEN);
+}
+
+main().catch((error) => {
+  console.error("[STARTUP] Fatal error while starting AK ESPORTS bot:", error);
+  process.exit(1);
 });
 
-client.once(Events.ClientReady, (readyClient) => {
-  console.log(`Logged in as ${readyClient.user.tag}`);
+process.on("unhandledRejection", (error) => {
+  console.error("[PROCESS] Unhandled promise rejection:", error);
 });
 
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) {
-    return;
-  }
-
-  const commands = await getCommands();
-  const command = commands.get(interaction.commandName);
-
-  if (!command) {
-    console.error(`No command matching "${interaction.commandName}" was found.`);
-    return;
-  }
-
-  try {
-    await command.execute(interaction);
-  } catch (error) {
-    console.error(`Error executing command "${interaction.commandName}":`, error);
-
-    const failureMessage = {
-      content: "There was an error while executing this command.",
-      ephemeral: true,
-    };
-
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp(failureMessage);
-    } else {
-      await interaction.reply(failureMessage);
-    }
-  }
+process.on("uncaughtException", (error) => {
+  console.error("[PROCESS] Uncaught exception:", error);
 });
-
-client.login(env.DISCORD_BOT_TOKEN);
 
 process.on("SIGTERM", () => {
-  console.log("Received SIGTERM, shutting down...");
-  client.destroy();
+  console.log("[PROCESS] Received SIGTERM, shutting down...");
   process.exit(0);
 });

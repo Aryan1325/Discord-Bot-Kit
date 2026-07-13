@@ -13,3 +13,7 @@ Discord bots (and similar headless, always-on processes) don't match any `create
 - Add its dir to the root `package.json` `typecheck` filter list so `pnpm run typecheck` covers it.
 
 **Why:** the artifact system assumes a servable preview; a Discord bot has none, so forcing it through `createArtifact` fails or produces meaningless routing. A plain workspace package + manual `configureWorkflow` is the natural fit.
+
+**Command/event registries must stay statically imported, not fs-scanned.** Production builds bundle via esbuild (single entry point); a `fs.readdirSync` + dynamic `import(computedPath)` pattern for commands/events can't be statically analyzed by esbuild, so those files are silently missing from the bundled `dist`. Keep one explicit `import` line per command/event file in `handlers/commandHandler.ts` / `handlers/eventHandler.ts` instead.
+
+**discord.js v14.26 type gotcha:** don't hoist `{ flags: MessageFlags.Ephemeral, ... }` into an intermediate `const payload = {...}` variable before passing it to `interaction.reply`/`followUp` — TS widens the `flags` property to the whole `MessageFlags` enum type there, which no longer matches `BitFieldResolvable`. Inline the options object directly in the call instead.

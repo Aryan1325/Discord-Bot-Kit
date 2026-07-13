@@ -2,7 +2,8 @@
  * Registers all slash commands with Discord.
  *
  * Run with `pnpm --filter @workspace/discord-bot run deploy-commands`
- * whenever a command is added, removed, or changed.
+ * whenever a command is added, removed, or changed. This is also run
+ * automatically as part of `pnpm run dev` / bot startup verification.
  *
  * If DISCORD_GUILD_ID is set, commands are registered to that single guild
  * (near-instant, ideal while developing). Otherwise they are registered
@@ -10,10 +11,10 @@
  */
 import { REST, Routes } from "discord.js";
 import { env } from "./env.js";
-import { getCommands } from "./loadCommands.js";
+import { loadCommands } from "./handlers/commandHandler.js";
 
 async function main() {
-  const commands = await getCommands();
+  const commands = await loadCommands();
   const body = [...commands.values()].map((command) => command.data.toJSON());
 
   const rest = new REST().setToken(env.DISCORD_BOT_TOKEN);
@@ -30,7 +31,7 @@ async function main() {
 
   const result = (await rest.put(route, { body })) as unknown[];
 
-  console.log(`Successfully registered ${result.length} command(s).`);
+  console.log(`Successfully registered ${result.length} command(s): ${[...commands.keys()].join(", ")}`);
 }
 
 main().catch((error) => {

@@ -18,6 +18,14 @@ async function buildCommandCollection(): Promise<Collection<string, Command>> {
     import("../commands/avatar.js"),
     import("../commands/userinfo.js"),
     import("../commands/serverinfo.js"),
+    import("../commands/kick.js"),
+    import("../commands/ban.js"),
+    import("../commands/unban.js"),
+    import("../commands/timeout.js"),
+    import("../commands/untimeout.js"),
+    import("../commands/warn.js"),
+    import("../commands/warnings.js"),
+    import("../commands/clear.js"),
   ]);
 
   const commands = new Collection<string, Command>();

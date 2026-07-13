@@ -24,6 +24,14 @@ const COMMAND_CATEGORIES: Record<string, Exclude<CategoryId, "home">> = {
   avatar: "general",
   userinfo: "utility",
   serverinfo: "utility",
+  kick: "moderation",
+  ban: "moderation",
+  unban: "moderation",
+  timeout: "moderation",
+  untimeout: "moderation",
+  warn: "moderation",
+  warnings: "moderation",
+  clear: "moderation",
 };
 
 export const command: Command = {

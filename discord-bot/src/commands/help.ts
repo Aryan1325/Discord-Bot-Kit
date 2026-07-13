@@ -18,6 +18,15 @@ const CATEGORY_LABELS: Record<CategoryId, string> = {
   admin: "Admin",
 };
 
+const CATEGORY_EMOJIS: Record<CategoryId, string> = {
+  home: "🏠",
+  general: "📌",
+  utility: "🛠",
+  moderation: "🛡",
+  fun: "🎉",
+  admin: "⚙",
+};
+
 // Maps each existing command to the category it's shown under in /help.
 const COMMAND_CATEGORIES: Record<string, Exclude<CategoryId, "home">> = {
   ping: "utility",
@@ -40,6 +49,16 @@ const COMMAND_CATEGORIES: Record<string, Exclude<CategoryId, "home">> = {
   slowmode: "utility",
   lock: "utility",
   unlock: "utility",
+  coinflip: "fun",
+  dice: "fun",
+  "8ball": "fun",
+  nick: "admin",
+  role: "admin",
+  membercount: "admin",
+  channelinfo: "admin",
+  roleinfo: "admin",
+  emojiinfo: "admin",
+  botinfo: "admin",
 };
 
 export const command: Command = {
@@ -56,7 +75,7 @@ export const command: Command = {
       const meta = commandMeta[cmd.data.name];
 
       const entry = meta
-        ? `**\`/${cmd.data.name}\`** — ${cmd.data.description}\nUsage: \`${meta.usage}\`\nPermission: ${meta.permission}`
+        ? `**\`/${cmd.data.name}\`** — ${cmd.data.description}\nUsage: \`${meta.usage}\`\nExample: \`${meta.example}\`\nPermission: ${meta.permission}`
         : `\`/${cmd.data.name}\` — ${cmd.data.description}`;
 
       list.push(entry);
@@ -67,7 +86,7 @@ export const command: Command = {
       if (category === "home") {
         return createEmbed({
           client,
-          title: `${botConfig.name} — Help Menu`,
+          title: `${CATEGORY_EMOJIS.home} ${botConfig.name} — Help Menu`,
           description: "Use the buttons below to browse commands by category.",
           fields: [
             { name: "Bot Version", value: botConfig.version, inline: true },
@@ -87,7 +106,7 @@ export const command: Command = {
       const commandList = grouped.get(category);
       return createEmbed({
         client,
-        title: `${botConfig.name} — ${CATEGORY_LABELS[category]} Commands`,
+        title: `${botConfig.name} — ${CATEGORY_EMOJIS[category]} ${CATEGORY_LABELS[category]} Commands`,
         description:
           commandList && commandList.length > 0
             ? commandList.join("\n\n")
@@ -99,6 +118,7 @@ export const command: Command = {
       (Object.keys(CATEGORY_LABELS) as CategoryId[]).map((category) => ({
         customId: `help:${category}`,
         label: CATEGORY_LABELS[category],
+        emoji: CATEGORY_EMOJIS[category],
         style: category === "home" ? ButtonStyle.Primary : ButtonStyle.Secondary,
       })),
     );

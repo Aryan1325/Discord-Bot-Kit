@@ -92,6 +92,12 @@ export const command: Command = {
       return;
     }
 
+    // All synchronous validation has passed. Acknowledge the interaction
+    // immediately so Discord never sees us go past the 3-second response
+    // window — the actual channel.send() below is a network call and
+    // must not race that deadline.
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     // banner_url takes priority over image_url when both are provided.
     const resolvedImage = isValidUrl(bannerInput) ? bannerInput : isValidUrl(imageInput) ? imageInput : undefined;
 
@@ -110,14 +116,21 @@ export const command: Command = {
         : undefined,
     });
 
-    await interaction.channel.send({
-      embeds: [embed],
-      allowedMentions: { parse: ["users", "roles"] },
-    });
+    try {
+      await interaction.channel.send({
+        embeds: [embed],
+        allowedMentions: { parse: ["users", "roles"] },
+      });
+    } catch (error) {
+      console.error("[COMMAND] /embed failed to send the channel message:", error);
+      await interaction.editReply({
+        embeds: [createErrorEmbed(interaction.client, "I couldn't post that embed — please check my channel permissions and try again.")],
+      });
+      return;
+    }
 
-    await interaction.reply({
+    await interaction.editReply({
       content: "Embed sent.",
-      flags: MessageFlags.Ephemeral,
     });
   },
 };

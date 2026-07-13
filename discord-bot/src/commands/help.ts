@@ -7,7 +7,7 @@ import { formatUptime } from "../utils/formatUptime.js";
 import { loadCommands } from "../handlers/commandHandler.js";
 import { commandMeta } from "../utils/commandMeta.js";
 
-type CategoryId = "home" | "general" | "utility" | "moderation" | "fun" | "admin";
+type CategoryId = "home" | "general" | "utility" | "moderation" | "fun" | "admin" | "configuration" | "database" | "logging";
 
 const CATEGORY_LABELS: Record<CategoryId, string> = {
   home: "Home",
@@ -16,6 +16,9 @@ const CATEGORY_LABELS: Record<CategoryId, string> = {
   moderation: "Moderation",
   fun: "Fun",
   admin: "Admin",
+  configuration: "Configuration",
+  database: "Database",
+  logging: "Logging",
 };
 
 const CATEGORY_EMOJIS: Record<CategoryId, string> = {
@@ -25,10 +28,19 @@ const CATEGORY_EMOJIS: Record<CategoryId, string> = {
   moderation: "🛡",
   fun: "🎉",
   admin: "⚙",
+  configuration: "⚙",
+  database: "📂",
+  logging: "📊",
+};
+
+/** Categories with no user-facing slash commands — they show a status blurb instead of a command list. */
+const INFO_ONLY_CATEGORIES: Partial<Record<CategoryId, string>> = {
+  database: "AK ESPORTS is backed by a persistent SQLite database (guild settings, welcome/goodbye, verification, tickets, reaction roles, warnings, levels, giveaways, and suggestions all live here). Guild settings are also cached in memory for fast reads.",
+  logging: "A modular logging framework is in place for Message Delete, Message Edit, Member Join, Member Leave, Role Changes, Channel Changes, Nickname Changes, and Moderation Actions. Event wiring is rolling out — check back soon for `/config` options to enable each log type.",
 };
 
 // Maps each existing command to the category it's shown under in /help.
-const COMMAND_CATEGORIES: Record<string, Exclude<CategoryId, "home">> = {
+const COMMAND_CATEGORIES: Record<string, Exclude<CategoryId, "home" | "database" | "logging">> = {
   ping: "utility",
   help: "general",
   avatar: "general",
@@ -59,6 +71,7 @@ const COMMAND_CATEGORIES: Record<string, Exclude<CategoryId, "home">> = {
   roleinfo: "admin",
   emojiinfo: "admin",
   botinfo: "admin",
+  config: "configuration",
 };
 
 export const command: Command = {
@@ -100,6 +113,15 @@ export const command: Command = {
               inline: true,
             },
           ],
+        });
+      }
+
+      const infoBlurb = INFO_ONLY_CATEGORIES[category];
+      if (infoBlurb) {
+        return createEmbed({
+          client,
+          title: `${botConfig.name} — ${CATEGORY_EMOJIS[category]} ${CATEGORY_LABELS[category]}`,
+          description: infoBlurb,
         });
       }
 

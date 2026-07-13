@@ -74,4 +74,9 @@ export const commandMeta: Record<string, CommandMeta> = {
   roleinfo: { usage: "/roleinfo role:<@role>", example: "/roleinfo role:@Verified", permission: "None" },
   emojiinfo: { usage: "/emojiinfo", example: "/emojiinfo", permission: "None" },
   botinfo: { usage: "/botinfo", example: "/botinfo", permission: "None" },
+  config: {
+    usage: "/config <view|reset|export|import>",
+    example: "/config view",
+    permission: "Manage Guild",
+  },
 };

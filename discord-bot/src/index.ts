@@ -2,8 +2,17 @@ import { Client, GatewayIntentBits, Partials } from "discord.js";
 import { env } from "./env.js";
 import { loadCommands } from "./handlers/commandHandler.js";
 import { loadEvents } from "./handlers/eventHandler.js";
+import { getDb, getDatabaseStatus } from "./database/db.js";
+import { installGlobalErrorHandlers, logError } from "./errors/errorHandler.js";
 
 async function main() {
+  // Installed first so nothing below this line can crash the process.
+  installGlobalErrorHandlers();
+
+  getDb(); // Opens the SQLite connection and runs migrations before anything else starts.
+  const dbStatus = getDatabaseStatus();
+  console.log(`[STARTUP] Database ready: ${dbStatus.ready} (${dbStatus.path})`);
+
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
     partials: [Partials.User, Partials.GuildMember],
@@ -18,16 +27,8 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("[STARTUP] Fatal error while starting AK ESPORTS bot:", error);
+  logError("STARTUP", error);
   process.exit(1);
-});
-
-process.on("unhandledRejection", (error) => {
-  console.error("[PROCESS] Unhandled promise rejection:", error);
-});
-
-process.on("uncaughtException", (error) => {
-  console.error("[PROCESS] Uncaught exception:", error);
 });
 
 process.on("SIGTERM", () => {

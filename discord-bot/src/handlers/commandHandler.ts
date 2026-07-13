@@ -43,6 +43,7 @@ async function buildCommandCollection(): Promise<Collection<string, Command>> {
     import("../commands/roleinfo.js"),
     import("../commands/emojiinfo.js"),
     import("../commands/botinfo.js"),
+    import("../commands/config.js"),
   ]);
 
   const commands = new Collection<string, Command>();

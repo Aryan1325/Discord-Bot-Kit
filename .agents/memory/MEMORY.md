@@ -1,0 +1,1 @@
+- [Discord bot in pnpm monorepo](discord-bot-package.md) — bots don't fit the artifact system; add as a plain workspace package + console workflow.

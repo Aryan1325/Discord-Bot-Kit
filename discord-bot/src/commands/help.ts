@@ -5,6 +5,7 @@ import { createButtonRows } from "../embeds/components.js";
 import { botConfig } from "../config/botConfig.js";
 import { formatUptime } from "../utils/formatUptime.js";
 import { loadCommands } from "../handlers/commandHandler.js";
+import { commandMeta } from "../utils/commandMeta.js";
 
 type CategoryId = "home" | "general" | "utility" | "moderation" | "fun" | "admin";
 
@@ -32,6 +33,13 @@ const COMMAND_CATEGORIES: Record<string, Exclude<CategoryId, "home">> = {
   warn: "moderation",
   warnings: "moderation",
   clear: "moderation",
+  say: "utility",
+  embed: "utility",
+  poll: "utility",
+  announce: "utility",
+  slowmode: "utility",
+  lock: "utility",
+  unlock: "utility",
 };
 
 export const command: Command = {
@@ -45,7 +53,13 @@ export const command: Command = {
     for (const cmd of commands.values()) {
       const category = COMMAND_CATEGORIES[cmd.data.name] ?? "general";
       const list = grouped.get(category) ?? [];
-      list.push(`\`/${cmd.data.name}\` — ${cmd.data.description}`);
+      const meta = commandMeta[cmd.data.name];
+
+      const entry = meta
+        ? `**\`/${cmd.data.name}\`** — ${cmd.data.description}\nUsage: \`${meta.usage}\`\nPermission: ${meta.permission}`
+        : `\`/${cmd.data.name}\` — ${cmd.data.description}`;
+
+      list.push(entry);
       grouped.set(category, list);
     }
 
@@ -76,7 +90,7 @@ export const command: Command = {
         title: `${botConfig.name} — ${CATEGORY_LABELS[category]} Commands`,
         description:
           commandList && commandList.length > 0
-            ? commandList.join("\n")
+            ? commandList.join("\n\n")
             : "No commands in this category yet — check back soon.",
       });
     };

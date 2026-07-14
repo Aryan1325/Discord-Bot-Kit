@@ -21,6 +21,10 @@ export enum LogEventType {
   TicketMembersAdded = "ticket_members_added",
   TicketMembersRemoved = "ticket_members_removed",
   TicketTranscriptGenerated = "ticket_transcript_generated",
+  WelcomeSent = "welcome_sent",
+  GoodbyeSent = "goodbye_sent",
+  AutoRoleGiven = "auto_role_given",
+  DmFailed = "dm_failed",
 }
 
 export const LOG_EVENT_LABELS: Record<LogEventType, string> = {
@@ -39,6 +43,10 @@ export const LOG_EVENT_LABELS: Record<LogEventType, string> = {
   [LogEventType.TicketMembersAdded]: "Ticket Members Added",
   [LogEventType.TicketMembersRemoved]: "Ticket Members Removed",
   [LogEventType.TicketTranscriptGenerated]: "Ticket Transcript Generated",
+  [LogEventType.WelcomeSent]: "Welcome Sent",
+  [LogEventType.GoodbyeSent]: "Goodbye Sent",
+  [LogEventType.AutoRoleGiven]: "Auto Role Given",
+  [LogEventType.DmFailed]: "DM Failed",
 };
 
 export interface LogPayload {

@@ -37,6 +37,16 @@ export const commandMeta: Record<string, CommandMeta> = {
     example: "/ticket panel channel:#support",
     permission: "Manage Server (setup/panel) — varies by subcommand",
   },
+  welcome: {
+    usage: "/welcome <setup|disable|test|preview> [channel] [auto_role] [dm_enable] [image_enable] [embed_enable] [title] [description]",
+    example: "/welcome setup channel:#welcome auto_role:@Member image_enable:true",
+    permission: "Manage Server",
+  },
+  goodbye: {
+    usage: "/goodbye <setup|disable|test|preview> [channel] [dm_enable] [image_enable] [embed_enable] [title] [description]",
+    example: "/goodbye setup channel:#goodbye image_enable:true",
+    permission: "Manage Server",
+  },
   lock: { usage: "/lock", example: "/lock", permission: "Manage Channels" },
   unlock: { usage: "/unlock", example: "/unlock", permission: "Manage Channels" },
 

@@ -3,6 +3,8 @@ import { event as readyEvent } from "../events/ready.js";
 import { event as interactionCreateEvent } from "../events/interactionCreate.js";
 import { event as guildCreateEvent } from "../events/guildCreate.js";
 import { event as guildDeleteEvent } from "../events/guildDelete.js";
+import { event as guildMemberAddEvent } from "../events/guildMemberAdd.js";
+import { event as guildMemberRemoveEvent } from "../events/guildMemberRemove.js";
 import type { BotEvent } from "../types/index.js";
 
 /**
@@ -13,7 +15,14 @@ import type { BotEvent } from "../types/index.js";
  * To add an event: create `src/events/<name>.ts` exporting `event: BotEvent`,
  * then add one import + one array entry below.
  */
-const events: BotEvent[] = [readyEvent, interactionCreateEvent, guildCreateEvent, guildDeleteEvent];
+const events: BotEvent[] = [
+  readyEvent,
+  interactionCreateEvent,
+  guildCreateEvent,
+  guildDeleteEvent,
+  guildMemberAddEvent,
+  guildMemberRemoveEvent,
+];
 
 /** Binds every registered event to the client. */
 export function loadEvents(client: Client): void {

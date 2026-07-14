@@ -1,1 +1,3 @@
 - [Discord bot in pnpm monorepo](discord-bot-package.md) — bots don't fit the artifact system; add as a plain workspace package + console workflow.
+- [DB schema migrations](db-schema-migrations.md) — no migration framework; new columns need both CREATE TABLE (schema.ts) and ALTER TABLE ADD COLUMN (db.ts) updates.
+- [esbuild + native binaries](esbuild-native-binaries.md) — packages like @napi-rs/canvas need `external` in build.mjs or the bundle step fails.

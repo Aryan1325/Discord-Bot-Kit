@@ -28,6 +28,12 @@ export const SCHEMA_STATEMENTS: string[] = [
     enabled INTEGER NOT NULL DEFAULT 0,
     channel_id TEXT,
     message TEXT,
+    embed_enabled INTEGER NOT NULL DEFAULT 1,
+    image_enabled INTEGER NOT NULL DEFAULT 0,
+    title TEXT,
+    description TEXT,
+    auto_role_id TEXT,
+    dm_enabled INTEGER NOT NULL DEFAULT 0,
     updated_at INTEGER NOT NULL
   )`,
 
@@ -36,6 +42,11 @@ export const SCHEMA_STATEMENTS: string[] = [
     enabled INTEGER NOT NULL DEFAULT 0,
     channel_id TEXT,
     message TEXT,
+    embed_enabled INTEGER NOT NULL DEFAULT 1,
+    image_enabled INTEGER NOT NULL DEFAULT 0,
+    title TEXT,
+    description TEXT,
+    dm_enabled INTEGER NOT NULL DEFAULT 0,
     updated_at INTEGER NOT NULL
   )`,
 

@@ -45,47 +45,144 @@ export function ensureGuildSettings(guildId: string): GuildSettings {
 // ---------------------------------------------------------------------
 // Welcome / Goodbye Settings
 // ---------------------------------------------------------------------
+
+/** Common fields shared by both `welcome_settings` and `goodbye_settings`. */
 export interface WelcomeGoodbyeSettings {
   guildId: string;
   enabled: boolean;
   channelId: string | null;
   message: string | null;
+  embedEnabled: boolean;
+  imageEnabled: boolean;
+  title: string | null;
+  description: string | null;
+  dmEnabled: boolean;
   updatedAt: number;
 }
 
-function getMessageSettings(table: "welcome_settings" | "goodbye_settings", guildId: string): WelcomeGoodbyeSettings | null {
-  const row = getDb()
-    .prepare(`SELECT guild_id as guildId, enabled, channel_id as channelId, message, updated_at as updatedAt FROM ${table} WHERE guild_id = ?`)
-    .get(guildId) as (Omit<WelcomeGoodbyeSettings, "enabled"> & { enabled: number }) | undefined;
-  if (!row) return null;
-  return { ...row, enabled: Boolean(row.enabled) };
+/** `welcome_settings` adds an auto-role column that `goodbye_settings` doesn't have. */
+export interface WelcomeSettings extends WelcomeGoodbyeSettings {
+  autoRoleId: string | null;
 }
 
-function upsertMessageSettings(
-  table: "welcome_settings" | "goodbye_settings",
-  guildId: string,
-  patch: Partial<Pick<WelcomeGoodbyeSettings, "enabled" | "channelId" | "message">>,
-): WelcomeGoodbyeSettings {
-  const current = getMessageSettings(table, guildId) ?? { guildId, enabled: false, channelId: null, message: null, updatedAt: 0 };
+export type GoodbyeSettings = WelcomeGoodbyeSettings;
+
+type CommonPatch = Partial<Pick<WelcomeGoodbyeSettings, "enabled" | "channelId" | "message" | "embedEnabled" | "imageEnabled" | "title" | "description" | "dmEnabled">>;
+
+const COMMON_DEFAULTS = {
+  enabled: false,
+  channelId: null,
+  message: null,
+  embedEnabled: true,
+  imageEnabled: false,
+  title: null,
+  description: null,
+  dmEnabled: false,
+  updatedAt: 0,
+} as const;
+
+function getGoodbyeRow(guildId: string): GoodbyeSettings | null {
+  const row = getDb()
+    .prepare(
+      `SELECT guild_id as guildId, enabled, channel_id as channelId, message, embed_enabled as embedEnabled,
+              image_enabled as imageEnabled, title, description, dm_enabled as dmEnabled, updated_at as updatedAt
+       FROM goodbye_settings WHERE guild_id = ?`,
+    )
+    .get(guildId) as
+    | (Omit<GoodbyeSettings, "enabled" | "embedEnabled" | "imageEnabled" | "dmEnabled"> & {
+        enabled: number;
+        embedEnabled: number;
+        imageEnabled: number;
+        dmEnabled: number;
+      })
+    | undefined;
+  if (!row) return null;
+  return { ...row, enabled: Boolean(row.enabled), embedEnabled: Boolean(row.embedEnabled), imageEnabled: Boolean(row.imageEnabled), dmEnabled: Boolean(row.dmEnabled) };
+}
+
+export function getGoodbyeSettings(guildId: string): GoodbyeSettings | null {
+  return getGoodbyeRow(guildId);
+}
+
+export function upsertGoodbyeSettings(guildId: string, patch: CommonPatch): GoodbyeSettings {
+  const current = getGoodbyeRow(guildId) ?? { guildId, ...COMMON_DEFAULTS };
   const merged = { ...current, ...patch, updatedAt: now() };
 
   getDb()
     .prepare(
-      `INSERT INTO ${table} (guild_id, enabled, channel_id, message, updated_at) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(guild_id) DO UPDATE SET enabled = excluded.enabled, channel_id = excluded.channel_id, message = excluded.message, updated_at = excluded.updated_at`,
+      `INSERT INTO goodbye_settings (guild_id, enabled, channel_id, message, embed_enabled, image_enabled, title, description, dm_enabled, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(guild_id) DO UPDATE SET enabled = excluded.enabled, channel_id = excluded.channel_id, message = excluded.message,
+         embed_enabled = excluded.embed_enabled, image_enabled = excluded.image_enabled, title = excluded.title,
+         description = excluded.description, dm_enabled = excluded.dm_enabled, updated_at = excluded.updated_at`,
     )
-    .run(guildId, merged.enabled ? 1 : 0, merged.channelId, merged.message, merged.updatedAt);
+    .run(
+      guildId,
+      merged.enabled ? 1 : 0,
+      merged.channelId,
+      merged.message,
+      merged.embedEnabled ? 1 : 0,
+      merged.imageEnabled ? 1 : 0,
+      merged.title,
+      merged.description,
+      merged.dmEnabled ? 1 : 0,
+      merged.updatedAt,
+    );
 
   return merged;
 }
 
-export const getWelcomeSettings = (guildId: string) => getMessageSettings("welcome_settings", guildId);
-export const upsertWelcomeSettings = (guildId: string, patch: Partial<Pick<WelcomeGoodbyeSettings, "enabled" | "channelId" | "message">>) =>
-  upsertMessageSettings("welcome_settings", guildId, patch);
+function getWelcomeRow(guildId: string): WelcomeSettings | null {
+  const row = getDb()
+    .prepare(
+      `SELECT guild_id as guildId, enabled, channel_id as channelId, message, embed_enabled as embedEnabled,
+              image_enabled as imageEnabled, title, description, auto_role_id as autoRoleId, dm_enabled as dmEnabled, updated_at as updatedAt
+       FROM welcome_settings WHERE guild_id = ?`,
+    )
+    .get(guildId) as
+    | (Omit<WelcomeSettings, "enabled" | "embedEnabled" | "imageEnabled" | "dmEnabled"> & {
+        enabled: number;
+        embedEnabled: number;
+        imageEnabled: number;
+        dmEnabled: number;
+      })
+    | undefined;
+  if (!row) return null;
+  return { ...row, enabled: Boolean(row.enabled), embedEnabled: Boolean(row.embedEnabled), imageEnabled: Boolean(row.imageEnabled), dmEnabled: Boolean(row.dmEnabled) };
+}
 
-export const getGoodbyeSettings = (guildId: string) => getMessageSettings("goodbye_settings", guildId);
-export const upsertGoodbyeSettings = (guildId: string, patch: Partial<Pick<WelcomeGoodbyeSettings, "enabled" | "channelId" | "message">>) =>
-  upsertMessageSettings("goodbye_settings", guildId, patch);
+export function getWelcomeSettings(guildId: string): WelcomeSettings | null {
+  return getWelcomeRow(guildId);
+}
+
+export function upsertWelcomeSettings(guildId: string, patch: CommonPatch & Partial<Pick<WelcomeSettings, "autoRoleId">>): WelcomeSettings {
+  const current = getWelcomeRow(guildId) ?? { guildId, ...COMMON_DEFAULTS, autoRoleId: null };
+  const merged = { ...current, ...patch, updatedAt: now() };
+
+  getDb()
+    .prepare(
+      `INSERT INTO welcome_settings (guild_id, enabled, channel_id, message, embed_enabled, image_enabled, title, description, auto_role_id, dm_enabled, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(guild_id) DO UPDATE SET enabled = excluded.enabled, channel_id = excluded.channel_id, message = excluded.message,
+         embed_enabled = excluded.embed_enabled, image_enabled = excluded.image_enabled, title = excluded.title,
+         description = excluded.description, auto_role_id = excluded.auto_role_id, dm_enabled = excluded.dm_enabled, updated_at = excluded.updated_at`,
+    )
+    .run(
+      guildId,
+      merged.enabled ? 1 : 0,
+      merged.channelId,
+      merged.message,
+      merged.embedEnabled ? 1 : 0,
+      merged.imageEnabled ? 1 : 0,
+      merged.title,
+      merged.description,
+      merged.autoRoleId,
+      merged.dmEnabled ? 1 : 0,
+      merged.updatedAt,
+    );
+
+  return merged;
+}
 
 // ---------------------------------------------------------------------
 // Verification Settings
@@ -541,8 +638,8 @@ export function setConfigValue(key: string, value: string): void {
 // ---------------------------------------------------------------------
 export interface FullGuildConfig {
   guildSettings: Omit<GuildSettings, "guildId"> | null;
-  welcome: Omit<WelcomeGoodbyeSettings, "guildId"> | null;
-  goodbye: Omit<WelcomeGoodbyeSettings, "guildId"> | null;
+  welcome: Omit<WelcomeSettings, "guildId"> | null;
+  goodbye: Omit<GoodbyeSettings, "guildId"> | null;
   verification: Omit<VerificationSettings, "guildId"> | null;
   tickets: Omit<TicketSettings, "guildId"> | null;
   logging: Omit<LogSettings, "guildId"> | null;
@@ -601,6 +698,12 @@ export function importGuildConfig(guildId: string, data: Partial<FullGuildConfig
       enabled: Boolean(data.welcome.enabled),
       channelId: data.welcome.channelId ?? null,
       message: data.welcome.message ?? null,
+      embedEnabled: data.welcome.embedEnabled ?? true,
+      imageEnabled: Boolean(data.welcome.imageEnabled),
+      title: data.welcome.title ?? null,
+      description: data.welcome.description ?? null,
+      autoRoleId: data.welcome.autoRoleId ?? null,
+      dmEnabled: Boolean(data.welcome.dmEnabled),
     });
   }
   if (data.goodbye && typeof data.goodbye === "object") {
@@ -608,6 +711,11 @@ export function importGuildConfig(guildId: string, data: Partial<FullGuildConfig
       enabled: Boolean(data.goodbye.enabled),
       channelId: data.goodbye.channelId ?? null,
       message: data.goodbye.message ?? null,
+      embedEnabled: data.goodbye.embedEnabled ?? true,
+      imageEnabled: Boolean(data.goodbye.imageEnabled),
+      title: data.goodbye.title ?? null,
+      description: data.goodbye.description ?? null,
+      dmEnabled: Boolean(data.goodbye.dmEnabled),
     });
   }
   if (data.verification && typeof data.verification === "object") {

@@ -42,6 +42,17 @@ export function getDb(): DatabaseSync {
       "ALTER TABLE ticket_settings ADD COLUMN transcript_channel_id TEXT",
       "ALTER TABLE ticket_settings ADD COLUMN max_open_tickets INTEGER NOT NULL DEFAULT 0",
       "ALTER TABLE ticket_settings ADD COLUMN ticket_name_format TEXT NOT NULL DEFAULT 'ticket-{username}'",
+      "ALTER TABLE welcome_settings ADD COLUMN embed_enabled INTEGER NOT NULL DEFAULT 1",
+      "ALTER TABLE welcome_settings ADD COLUMN image_enabled INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE welcome_settings ADD COLUMN title TEXT",
+      "ALTER TABLE welcome_settings ADD COLUMN description TEXT",
+      "ALTER TABLE welcome_settings ADD COLUMN auto_role_id TEXT",
+      "ALTER TABLE welcome_settings ADD COLUMN dm_enabled INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE goodbye_settings ADD COLUMN embed_enabled INTEGER NOT NULL DEFAULT 1",
+      "ALTER TABLE goodbye_settings ADD COLUMN image_enabled INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE goodbye_settings ADD COLUMN title TEXT",
+      "ALTER TABLE goodbye_settings ADD COLUMN description TEXT",
+      "ALTER TABLE goodbye_settings ADD COLUMN dm_enabled INTEGER NOT NULL DEFAULT 0",
     ];
     for (const statement of columnMigrations) {
       try {

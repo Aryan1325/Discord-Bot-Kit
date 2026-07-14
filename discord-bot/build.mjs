@@ -21,6 +21,10 @@ async function buildAll() {
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
     sourcemap: "linked",
+    // Native-binary packages can't be bundled by esbuild — keep them as
+    // real runtime `require`/`import` calls so the bundle just loads the
+    // prebuilt .node binary from node_modules instead of inlining it.
+    external: ["@napi-rs/canvas", "@napi-rs/canvas-*"],
     banner: {
       js: `import { createRequire as __bannerCrReq } from 'node:module';
 import __bannerPath from 'node:path';

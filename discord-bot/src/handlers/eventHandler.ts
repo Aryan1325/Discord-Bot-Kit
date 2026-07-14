@@ -27,10 +27,12 @@ const events: BotEvent[] = [
 /** Binds every registered event to the client. */
 export function loadEvents(client: Client): void {
   for (const botEvent of events) {
-    const listener = (...args: unknown[]) => {
-      void Promise.resolve(botEvent.execute(client, ...args)).catch((error: unknown) => {
+    const listener = async (...args: unknown[]) => {
+      try {
+        await botEvent.execute(client, ...args);
+      } catch (error: unknown) {
         console.error(`[EVENT] Unhandled error in "${botEvent.name}" handler:`, error);
-      });
+      }
     };
 
     if (botEvent.once) {

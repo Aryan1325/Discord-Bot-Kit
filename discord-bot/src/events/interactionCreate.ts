@@ -2,11 +2,22 @@ import { Events, type Interaction } from "discord.js";
 import type { BotEvent } from "../types/index.js";
 import { loadCommands } from "../handlers/commandHandler.js";
 import { handleInteractionError, logError } from "../errors/errorHandler.js";
+import { handleTicketButton, handleTicketModal } from "../tickets/interactionHandlers.js";
 
 export const event: BotEvent = {
   name: Events.InteractionCreate,
   async execute(_client, ...args) {
     const interaction = args[0] as Interaction;
+
+    if (interaction.isButton() && interaction.customId.startsWith("ticket:")) {
+      await handleTicketButton(interaction);
+      return;
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId.startsWith("ticket:")) {
+      await handleTicketModal(interaction);
+      return;
+    }
 
     if (!interaction.isChatInputCommand()) {
       return;

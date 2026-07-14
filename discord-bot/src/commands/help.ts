@@ -7,7 +7,7 @@ import { formatUptime } from "../utils/formatUptime.js";
 import { loadCommands } from "../handlers/commandHandler.js";
 import { commandMeta } from "../utils/commandMeta.js";
 
-type CategoryId = "home" | "general" | "utility" | "moderation" | "fun" | "admin" | "configuration" | "database" | "logging";
+type CategoryId = "home" | "general" | "utility" | "moderation" | "fun" | "admin" | "configuration" | "tickets" | "database" | "logging";
 
 const CATEGORY_LABELS: Record<CategoryId, string> = {
   home: "Home",
@@ -17,6 +17,7 @@ const CATEGORY_LABELS: Record<CategoryId, string> = {
   fun: "Fun",
   admin: "Admin",
   configuration: "Configuration",
+  tickets: "Tickets",
   database: "Database",
   logging: "Logging",
 };
@@ -29,6 +30,7 @@ const CATEGORY_EMOJIS: Record<CategoryId, string> = {
   fun: "🎉",
   admin: "⚙",
   configuration: "⚙",
+  tickets: "🎫",
   database: "📂",
   logging: "📊",
 };
@@ -72,6 +74,7 @@ const COMMAND_CATEGORIES: Record<string, Exclude<CategoryId, "home" | "database"
   emojiinfo: "admin",
   botinfo: "admin",
   config: "configuration",
+  ticket: "tickets",
 };
 
 export const command: Command = {

@@ -34,6 +34,26 @@ export function getDb(): DatabaseSync {
       db.exec(statement);
     }
 
+    // Column additions for tables that existed before this column was
+    // introduced. `ALTER TABLE ... ADD COLUMN` has no `IF NOT EXISTS`
+    // form in SQLite, so each is wrapped individually — a "duplicate
+    // column" failure just means a previous boot already applied it.
+    const columnMigrations = [
+      "ALTER TABLE ticket_settings ADD COLUMN transcript_channel_id TEXT",
+      "ALTER TABLE ticket_settings ADD COLUMN max_open_tickets INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE ticket_settings ADD COLUMN ticket_name_format TEXT NOT NULL DEFAULT 'ticket-{username}'",
+    ];
+    for (const statement of columnMigrations) {
+      try {
+        db.exec(statement);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.toLowerCase().includes("duplicate column")) {
+          throw error;
+        }
+      }
+    }
+
     ready = true;
     console.log(`[DATABASE] Connected and migrated: ${dbPath}`);
     return db;

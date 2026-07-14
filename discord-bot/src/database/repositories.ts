@@ -142,13 +142,19 @@ export interface TicketSettings {
   categoryId: string | null;
   supportRoleId: string | null;
   logChannelId: string | null;
+  transcriptChannelId: string | null;
+  maxOpenTickets: number;
+  ticketNameFormat: string;
   updatedAt: number;
 }
 
 export function getTicketSettings(guildId: string): TicketSettings | null {
   const row = getDb()
     .prepare(
-      "SELECT guild_id as guildId, enabled, category_id as categoryId, support_role_id as supportRoleId, log_channel_id as logChannelId, updated_at as updatedAt FROM ticket_settings WHERE guild_id = ?",
+      `SELECT guild_id as guildId, enabled, category_id as categoryId, support_role_id as supportRoleId,
+              log_channel_id as logChannelId, transcript_channel_id as transcriptChannelId,
+              max_open_tickets as maxOpenTickets, ticket_name_format as ticketNameFormat, updated_at as updatedAt
+       FROM ticket_settings WHERE guild_id = ?`,
     )
     .get(guildId) as (Omit<TicketSettings, "enabled"> & { enabled: number }) | undefined;
   if (!row) return null;
@@ -157,7 +163,9 @@ export function getTicketSettings(guildId: string): TicketSettings | null {
 
 export function upsertTicketSettings(
   guildId: string,
-  patch: Partial<Pick<TicketSettings, "enabled" | "categoryId" | "supportRoleId" | "logChannelId">>,
+  patch: Partial<
+    Pick<TicketSettings, "enabled" | "categoryId" | "supportRoleId" | "logChannelId" | "transcriptChannelId" | "maxOpenTickets" | "ticketNameFormat">
+  >,
 ): TicketSettings {
   const current = getTicketSettings(guildId) ?? {
     guildId,
@@ -165,18 +173,135 @@ export function upsertTicketSettings(
     categoryId: null,
     supportRoleId: null,
     logChannelId: null,
+    transcriptChannelId: null,
+    maxOpenTickets: 0,
+    ticketNameFormat: "ticket-{username}",
     updatedAt: 0,
   };
   const merged = { ...current, ...patch, updatedAt: now() };
 
   getDb()
     .prepare(
-      `INSERT INTO ticket_settings (guild_id, enabled, category_id, support_role_id, log_channel_id, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(guild_id) DO UPDATE SET enabled = excluded.enabled, category_id = excluded.category_id, support_role_id = excluded.support_role_id, log_channel_id = excluded.log_channel_id, updated_at = excluded.updated_at`,
+      `INSERT INTO ticket_settings (guild_id, enabled, category_id, support_role_id, log_channel_id, transcript_channel_id, max_open_tickets, ticket_name_format, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(guild_id) DO UPDATE SET enabled = excluded.enabled, category_id = excluded.category_id, support_role_id = excluded.support_role_id,
+         log_channel_id = excluded.log_channel_id, transcript_channel_id = excluded.transcript_channel_id,
+         max_open_tickets = excluded.max_open_tickets, ticket_name_format = excluded.ticket_name_format, updated_at = excluded.updated_at`,
     )
-    .run(guildId, merged.enabled ? 1 : 0, merged.categoryId, merged.supportRoleId, merged.logChannelId, merged.updatedAt);
+    .run(
+      guildId,
+      merged.enabled ? 1 : 0,
+      merged.categoryId,
+      merged.supportRoleId,
+      merged.logChannelId,
+      merged.transcriptChannelId,
+      merged.maxOpenTickets,
+      merged.ticketNameFormat,
+      merged.updatedAt,
+    );
 
   return merged;
+}
+
+// ---------------------------------------------------------------------
+// Tickets (one row per ticket ever opened)
+// ---------------------------------------------------------------------
+export type TicketStatus = "open" | "closed";
+
+export interface TicketRecord {
+  id: number;
+  guildId: string;
+  channelId: string;
+  ownerId: string;
+  type: string;
+  status: TicketStatus;
+  createdAt: number;
+  closedAt: number | null;
+  closedBy: string | null;
+  transcriptUrl: string | null;
+}
+
+function mapTicketRow(row: TicketRecord): TicketRecord {
+  return row;
+}
+
+export function createTicket(input: { guildId: string; channelId: string; ownerId: string; type: string }): TicketRecord {
+  const timestamp = now();
+  const result = getDb()
+    .prepare(
+      "INSERT INTO tickets (guild_id, channel_id, owner_id, type, status, created_at) VALUES (?, ?, ?, ?, 'open', ?)",
+    )
+    .run(input.guildId, input.channelId, input.ownerId, input.type, timestamp);
+
+  return {
+    id: Number(result.lastInsertRowid),
+    guildId: input.guildId,
+    channelId: input.channelId,
+    ownerId: input.ownerId,
+    type: input.type,
+    status: "open",
+    createdAt: timestamp,
+    closedAt: null,
+    closedBy: null,
+    transcriptUrl: null,
+  };
+}
+
+export function getTicketByChannelId(channelId: string): TicketRecord | null {
+  const row = getDb()
+    .prepare(
+      `SELECT id, guild_id as guildId, channel_id as channelId, owner_id as ownerId, type, status,
+              created_at as createdAt, closed_at as closedAt, closed_by as closedBy, transcript_url as transcriptUrl
+       FROM tickets WHERE channel_id = ?`,
+    )
+    .get(channelId) as TicketRecord | undefined;
+  return row ? mapTicketRow(row) : null;
+}
+
+export function countOpenTicketsForUser(guildId: string, ownerId: string): number {
+  const row = getDb()
+    .prepare("SELECT COUNT(*) as count FROM tickets WHERE guild_id = ? AND owner_id = ? AND status = 'open'")
+    .get(guildId, ownerId) as { count: number };
+  return row.count;
+}
+
+export function listTicketsForGuild(guildId: string, status?: TicketStatus): TicketRecord[] {
+  const rows = status
+    ? getDb()
+        .prepare(
+          `SELECT id, guild_id as guildId, channel_id as channelId, owner_id as ownerId, type, status,
+                  created_at as createdAt, closed_at as closedAt, closed_by as closedBy, transcript_url as transcriptUrl
+           FROM tickets WHERE guild_id = ? AND status = ? ORDER BY created_at DESC`,
+        )
+        .all(guildId, status)
+    : getDb()
+        .prepare(
+          `SELECT id, guild_id as guildId, channel_id as channelId, owner_id as ownerId, type, status,
+                  created_at as createdAt, closed_at as closedAt, closed_by as closedBy, transcript_url as transcriptUrl
+           FROM tickets WHERE guild_id = ? ORDER BY created_at DESC`,
+        )
+        .all(guildId);
+  return rows as unknown as TicketRecord[];
+}
+
+export function markTicketClosed(channelId: string, closedBy: string): void {
+  getDb()
+    .prepare("UPDATE tickets SET status = 'closed', closed_at = ?, closed_by = ? WHERE channel_id = ?")
+    .run(now(), closedBy, channelId);
+}
+
+export function markTicketReopened(channelId: string): void {
+  getDb()
+    .prepare("UPDATE tickets SET status = 'open', closed_at = NULL, closed_by = NULL WHERE channel_id = ?")
+    .run(channelId);
+}
+
+export function setTicketTranscriptUrl(channelId: string, url: string): void {
+  getDb().prepare("UPDATE tickets SET transcript_url = ? WHERE channel_id = ?").run(url, channelId);
+}
+
+export function deleteTicketRecord(channelId: string): void {
+  getDb().prepare("DELETE FROM tickets WHERE channel_id = ?").run(channelId);
 }
 
 // ---------------------------------------------------------------------
@@ -446,6 +571,7 @@ const GUILD_SCOPED_TABLES = [
   "goodbye_settings",
   "verification_settings",
   "ticket_settings",
+  "tickets",
   "log_settings",
   "reaction_roles",
   "warning_history",
@@ -498,6 +624,9 @@ export function importGuildConfig(guildId: string, data: Partial<FullGuildConfig
       categoryId: data.tickets.categoryId ?? null,
       supportRoleId: data.tickets.supportRoleId ?? null,
       logChannelId: data.tickets.logChannelId ?? null,
+      transcriptChannelId: data.tickets.transcriptChannelId ?? null,
+      maxOpenTickets: data.tickets.maxOpenTickets ?? 0,
+      ticketNameFormat: data.tickets.ticketNameFormat ?? "ticket-{username}",
     });
   }
   if (data.logging && typeof data.logging === "object") {

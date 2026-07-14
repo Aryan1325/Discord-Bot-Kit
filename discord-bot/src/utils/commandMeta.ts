@@ -32,6 +32,11 @@ export const commandMeta: Record<string, CommandMeta> = {
     permission: "Manage Guild",
   },
   slowmode: { usage: "/slowmode seconds:<0-21600>", example: "/slowmode seconds:10", permission: "Manage Channels" },
+  ticket: {
+    usage: "/ticket <setup|panel|close|reopen|delete|add|remove|rename|transcript>",
+    example: "/ticket panel channel:#support",
+    permission: "Manage Server (setup/panel) — varies by subcommand",
+  },
   lock: { usage: "/lock", example: "/lock", permission: "Manage Channels" },
   unlock: { usage: "/unlock", example: "/unlock", permission: "Manage Channels" },
 

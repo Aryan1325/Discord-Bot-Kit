@@ -14,6 +14,13 @@ export enum LogEventType {
   ChannelChange = "channel_change",
   NicknameChange = "nickname_change",
   ModerationAction = "moderation_action",
+  TicketCreated = "ticket_created",
+  TicketClosed = "ticket_closed",
+  TicketDeleted = "ticket_deleted",
+  TicketRenamed = "ticket_renamed",
+  TicketMembersAdded = "ticket_members_added",
+  TicketMembersRemoved = "ticket_members_removed",
+  TicketTranscriptGenerated = "ticket_transcript_generated",
 }
 
 export const LOG_EVENT_LABELS: Record<LogEventType, string> = {
@@ -25,10 +32,17 @@ export const LOG_EVENT_LABELS: Record<LogEventType, string> = {
   [LogEventType.ChannelChange]: "Channel Change",
   [LogEventType.NicknameChange]: "Nickname Change",
   [LogEventType.ModerationAction]: "Moderation Action",
+  [LogEventType.TicketCreated]: "Ticket Created",
+  [LogEventType.TicketClosed]: "Ticket Closed",
+  [LogEventType.TicketDeleted]: "Ticket Deleted",
+  [LogEventType.TicketRenamed]: "Ticket Renamed",
+  [LogEventType.TicketMembersAdded]: "Ticket Members Added",
+  [LogEventType.TicketMembersRemoved]: "Ticket Members Removed",
+  [LogEventType.TicketTranscriptGenerated]: "Ticket Transcript Generated",
 };
 
 export interface LogPayload {
-  title: string;
+  title?: string;
   description?: string;
   fields?: { name: string; value: string; inline?: boolean }[];
 }

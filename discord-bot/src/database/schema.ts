@@ -54,7 +54,25 @@ export const SCHEMA_STATEMENTS: string[] = [
     category_id TEXT,
     support_role_id TEXT,
     log_channel_id TEXT,
+    transcript_channel_id TEXT,
+    max_open_tickets INTEGER NOT NULL DEFAULT 0,
+    ticket_name_format TEXT NOT NULL DEFAULT 'ticket-{username}',
     updated_at INTEGER NOT NULL
+  )`,
+
+  // One row per ticket ever created — kept after close/delete so history,
+  // transcripts, and logging always have something to point back to.
+  `CREATE TABLE IF NOT EXISTS tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL UNIQUE,
+    owner_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at INTEGER NOT NULL,
+    closed_at INTEGER,
+    closed_by TEXT,
+    transcript_url TEXT
   )`,
 
   `CREATE TABLE IF NOT EXISTS log_settings (

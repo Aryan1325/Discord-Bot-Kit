@@ -1,4 +1,4 @@
-import { Events, type Interaction } from "discord.js";
+import { Events, MessageFlags, type Interaction } from "discord.js";
 import type { BotEvent } from "../types/index.js";
 import { loadCommands } from "../handlers/commandHandler.js";
 import { handleInteractionError, logError } from "../errors/errorHandler.js";
@@ -28,6 +28,14 @@ export const event: BotEvent = {
 
     if (!command) {
       logError("INTERACTION", `Unknown command interaction: ${interaction.commandName}`);
+      await interaction
+        .reply({
+          content: `❌ Unknown command: \`${interaction.commandName}\`. Use \`/help\` to see available commands.`,
+          flags: MessageFlags.Ephemeral,
+        })
+        .catch(() => {
+          console.error(`[INTERACTION] Failed to send error response for unknown command: ${interaction.commandName}`);
+        });
       return;
     }
 

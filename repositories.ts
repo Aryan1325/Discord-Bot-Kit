@@ -1,0 +1,755 @@
+import { getDb } from "./db.js";
+
+/**
+ * Typed query helpers for every table in `schema.ts`, grouped by domain.
+ * Every guild-scoped table follows the same shape: a `guild_id` primary
+ * (or foreign) key and simple get/upsert helpers. This file is the only
+ * place that should touch `getDb()` directly — commands and events
+ * should always go through these functions.
+ */
+
+function now(): number {
+  return Date.now();
+}
+
+// ---------------------------------------------------------------------
+// Guild Settings
+// ---------------------------------------------------------------------
+export interface GuildSettings {
+  guildId: string;
+  prefix: string | null;
+  locale: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export function getGuildSettings(guildId: string): GuildSettings | null {
+  const row = getDb()
+    .prepare("SELECT guild_id as guildId, prefix, locale, created_at as createdAt, updated_at as updatedAt FROM guild_settings WHERE guild_id = ?")
+    .get(guildId) as GuildSettings | undefined;
+  return row ?? null;
+}
+
+export function ensureGuildSettings(guildId: string): GuildSettings {
+  const existing = getGuildSettings(guildId);
+  if (existing) return existing;
+
+  const timestamp = now();
+  getDb()
+    .prepare("INSERT INTO guild_settings (guild_id, prefix, locale, created_at, updated_at) VALUES (?, NULL, NULL, ?, ?)")
+    .run(guildId, timestamp, timestamp);
+
+  return { guildId, prefix: null, locale: null, createdAt: timestamp, updatedAt: timestamp };
+}
+
+// ---------------------------------------------------------------------
+// Welcome / Goodbye Settings
+// ---------------------------------------------------------------------
+
+/** Common fields shared by both `welcome_settings` and `goodbye_settings`. */
+export interface WelcomeGoodbyeSettings {
+  guildId: string;
+  enabled: boolean;
+  channelId: string | null;
+  message: string | null;
+  embedEnabled: boolean;
+  imageEnabled: boolean;
+  title: string | null;
+  description: string | null;
+  dmEnabled: boolean;
+  updatedAt: number;
+}
+
+/** `welcome_settings` adds an auto-role column that `goodbye_settings` doesn't have. */
+export interface WelcomeSettings extends WelcomeGoodbyeSettings {
+  autoRoleId: string | null;
+}
+
+export type GoodbyeSettings = WelcomeGoodbyeSettings;
+
+type CommonPatch = Partial<Pick<WelcomeGoodbyeSettings, "enabled" | "channelId" | "message" | "embedEnabled" | "imageEnabled" | "title" | "description" | "dmEnabled">>;
+
+const COMMON_DEFAULTS = {
+  enabled: false,
+  channelId: null,
+  message: null,
+  embedEnabled: true,
+  imageEnabled: false,
+  title: null,
+  description: null,
+  dmEnabled: false,
+  updatedAt: 0,
+} as const;
+
+function getGoodbyeRow(guildId: string): GoodbyeSettings | null {
+  const row = getDb()
+    .prepare(
+      `SELECT guild_id as guildId, enabled, channel_id as channelId, message, embed_enabled as embedEnabled,
+              image_enabled as imageEnabled, title, description, dm_enabled as dmEnabled, updated_at as updatedAt
+       FROM goodbye_settings WHERE guild_id = ?`,
+    )
+    .get(guildId) as
+    | (Omit<GoodbyeSettings, "enabled" | "embedEnabled" | "imageEnabled" | "dmEnabled"> & {
+        enabled: number;
+        embedEnabled: number;
+        imageEnabled: number;
+        dmEnabled: number;
+      })
+    | undefined;
+  if (!row) return null;
+  return { ...row, enabled: Boolean(row.enabled), embedEnabled: Boolean(row.embedEnabled), imageEnabled: Boolean(row.imageEnabled), dmEnabled: Boolean(row.dmEnabled) };
+}
+
+export function getGoodbyeSettings(guildId: string): GoodbyeSettings | null {
+  return getGoodbyeRow(guildId);
+}
+
+export function upsertGoodbyeSettings(guildId: string, patch: CommonPatch): GoodbyeSettings {
+  const current = getGoodbyeRow(guildId) ?? { guildId, ...COMMON_DEFAULTS };
+  const merged = { ...current, ...patch, updatedAt: now() };
+
+  getDb()
+    .prepare(
+      `INSERT INTO goodbye_settings (guild_id, enabled, channel_id, message, embed_enabled, image_enabled, title, description, dm_enabled, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(guild_id) DO UPDATE SET enabled = excluded.enabled, channel_id = excluded.channel_id, message = excluded.message,
+         embed_enabled = excluded.embed_enabled, image_enabled = excluded.image_enabled, title = excluded.title,
+         description = excluded.description, dm_enabled = excluded.dm_enabled, updated_at = excluded.updated_at`,
+    )
+    .run(
+      guildId,
+      merged.enabled ? 1 : 0,
+      merged.channelId,
+      merged.message,
+      merged.embedEnabled ? 1 : 0,
+      merged.imageEnabled ? 1 : 0,
+      merged.title,
+      merged.description,
+      merged.dmEnabled ? 1 : 0,
+      merged.updatedAt,
+    );
+
+  return merged;
+}
+
+function getWelcomeRow(guildId: string): WelcomeSettings | null {
+  const row = getDb()
+    .prepare(
+      `SELECT guild_id as guildId, enabled, channel_id as channelId, message, embed_enabled as embedEnabled,
+              image_enabled as imageEnabled, title, description, auto_role_id as autoRoleId, dm_enabled as dmEnabled, updated_at as updatedAt
+       FROM welcome_settings WHERE guild_id = ?`,
+    )
+    .get(guildId) as
+    | (Omit<WelcomeSettings, "enabled" | "embedEnabled" | "imageEnabled" | "dmEnabled"> & {
+        enabled: number;
+        embedEnabled: number;
+        imageEnabled: number;
+        dmEnabled: number;
+      })
+    | undefined;
+  if (!row) return null;
+  return { ...row, enabled: Boolean(row.enabled), embedEnabled: Boolean(row.embedEnabled), imageEnabled: Boolean(row.imageEnabled), dmEnabled: Boolean(row.dmEnabled) };
+}
+
+export function getWelcomeSettings(guildId: string): WelcomeSettings | null {
+  return getWelcomeRow(guildId);
+}
+
+export function upsertWelcomeSettings(guildId: string, patch: CommonPatch & Partial<Pick<WelcomeSettings, "autoRoleId">>): WelcomeSettings {
+  const current = getWelcomeRow(guildId) ?? { guildId, ...COMMON_DEFAULTS, autoRoleId: null };
+  const merged = { ...current, ...patch, updatedAt: now() };
+
+  getDb()
+    .prepare(
+      `INSERT INTO welcome_settings (guild_id, enabled, channel_id, message, embed_enabled, image_enabled, title, description, auto_role_id, dm_enabled, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(guild_id) DO UPDATE SET enabled = excluded.enabled, channel_id = excluded.channel_id, message = excluded.message,
+         embed_enabled = excluded.embed_enabled, image_enabled = excluded.image_enabled, title = excluded.title,
+         description = excluded.description, auto_role_id = excluded.auto_role_id, dm_enabled = excluded.dm_enabled, updated_at = excluded.updated_at`,
+    )
+    .run(
+      guildId,
+      merged.enabled ? 1 : 0,
+      merged.channelId,
+      merged.message,
+      merged.embedEnabled ? 1 : 0,
+      merged.imageEnabled ? 1 : 0,
+      merged.title,
+      merged.description,
+      merged.autoRoleId,
+      merged.dmEnabled ? 1 : 0,
+      merged.updatedAt,
+    );
+
+  return merged;
+}
+
+// ---------------------------------------------------------------------
+// Verification Settings
+// ---------------------------------------------------------------------
+export interface VerificationSettings {
+  guildId: string;
+  enabled: boolean;
+  channelId: string | null;
+  roleId: string | null;
+  message: string | null;
+  updatedAt: number;
+}
+
+export function getVerificationSettings(guildId: string): VerificationSettings | null {
+  const row = getDb()
+    .prepare(
+      "SELECT guild_id as guildId, enabled, channel_id as channelId, role_id as roleId, message, updated_at as updatedAt FROM verification_settings WHERE guild_id = ?",
+    )
+    .get(guildId) as (Omit<VerificationSettings, "enabled"> & { enabled: number }) | undefined;
+  if (!row) return null;
+  return { ...row, enabled: Boolean(row.enabled) };
+}
+
+export function upsertVerificationSettings(
+  guildId: string,
+  patch: Partial<Pick<VerificationSettings, "enabled" | "channelId" | "roleId" | "message">>,
+): VerificationSettings {
+  const current = getVerificationSettings(guildId) ?? {
+    guildId,
+    enabled: false,
+    channelId: null,
+    roleId: null,
+    message: null,
+    updatedAt: 0,
+  };
+  const merged = { ...current, ...patch, updatedAt: now() };
+
+  getDb()
+    .prepare(
+      `INSERT INTO verification_settings (guild_id, enabled, channel_id, role_id, message, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(guild_id) DO UPDATE SET enabled = excluded.enabled, channel_id = excluded.channel_id, role_id = excluded.role_id, message = excluded.message, updated_at = excluded.updated_at`,
+    )
+    .run(guildId, merged.enabled ? 1 : 0, merged.channelId, merged.roleId, merged.message, merged.updatedAt);
+
+  return merged;
+}
+
+// ---------------------------------------------------------------------
+// Ticket Settings
+// ---------------------------------------------------------------------
+export interface TicketSettings {
+  guildId: string;
+  enabled: boolean;
+  categoryId: string | null;
+  supportRoleId: string | null;
+  logChannelId: string | null;
+  transcriptChannelId: string | null;
+  maxOpenTickets: number;
+  ticketNameFormat: string;
+  updatedAt: number;
+}
+
+export function getTicketSettings(guildId: string): TicketSettings | null {
+  const row = getDb()
+    .prepare(
+      `SELECT guild_id as guildId, enabled, category_id as categoryId, support_role_id as supportRoleId,
+              log_channel_id as logChannelId, transcript_channel_id as transcriptChannelId,
+              max_open_tickets as maxOpenTickets, ticket_name_format as ticketNameFormat, updated_at as updatedAt
+       FROM ticket_settings WHERE guild_id = ?`,
+    )
+    .get(guildId) as (Omit<TicketSettings, "enabled"> & { enabled: number }) | undefined;
+  if (!row) return null;
+  return { ...row, enabled: Boolean(row.enabled) };
+}
+
+export function upsertTicketSettings(
+  guildId: string,
+  patch: Partial<
+    Pick<TicketSettings, "enabled" | "categoryId" | "supportRoleId" | "logChannelId" | "transcriptChannelId" | "maxOpenTickets" | "ticketNameFormat">
+  >,
+): TicketSettings {
+  const current = getTicketSettings(guildId) ?? {
+    guildId,
+    enabled: false,
+    categoryId: null,
+    supportRoleId: null,
+    logChannelId: null,
+    transcriptChannelId: null,
+    maxOpenTickets: 0,
+    ticketNameFormat: "ticket-{username}",
+    updatedAt: 0,
+  };
+  const merged = { ...current, ...patch, updatedAt: now() };
+
+  getDb()
+    .prepare(
+      `INSERT INTO ticket_settings (guild_id, enabled, category_id, support_role_id, log_channel_id, transcript_channel_id, max_open_tickets, ticket_name_format, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(guild_id) DO UPDATE SET enabled = excluded.enabled, category_id = excluded.category_id, support_role_id = excluded.support_role_id,
+         log_channel_id = excluded.log_channel_id, transcript_channel_id = excluded.transcript_channel_id,
+         max_open_tickets = excluded.max_open_tickets, ticket_name_format = excluded.ticket_name_format, updated_at = excluded.updated_at`,
+    )
+    .run(
+      guildId,
+      merged.enabled ? 1 : 0,
+      merged.categoryId,
+      merged.supportRoleId,
+      merged.logChannelId,
+      merged.transcriptChannelId,
+      merged.maxOpenTickets,
+      merged.ticketNameFormat,
+      merged.updatedAt,
+    );
+
+  return merged;
+}
+
+// ---------------------------------------------------------------------
+// Tickets (one row per ticket ever opened)
+// ---------------------------------------------------------------------
+export type TicketStatus = "open" | "closed";
+
+export interface TicketRecord {
+  id: number;
+  guildId: string;
+  channelId: string;
+  ownerId: string;
+  type: string;
+  status: TicketStatus;
+  createdAt: number;
+  closedAt: number | null;
+  closedBy: string | null;
+  transcriptUrl: string | null;
+}
+
+function mapTicketRow(row: TicketRecord): TicketRecord {
+  return row;
+}
+
+export function createTicket(input: { guildId: string; channelId: string; ownerId: string; type: string }): TicketRecord {
+  const timestamp = now();
+  const result = getDb()
+    .prepare(
+      "INSERT INTO tickets (guild_id, channel_id, owner_id, type, status, created_at) VALUES (?, ?, ?, ?, 'open', ?)",
+    )
+    .run(input.guildId, input.channelId, input.ownerId, input.type, timestamp);
+
+  return {
+    id: Number(result.lastInsertRowid),
+    guildId: input.guildId,
+    channelId: input.channelId,
+    ownerId: input.ownerId,
+    type: input.type,
+    status: "open",
+    createdAt: timestamp,
+    closedAt: null,
+    closedBy: null,
+    transcriptUrl: null,
+  };
+}
+
+export function getTicketByChannelId(channelId: string): TicketRecord | null {
+  const row = getDb()
+    .prepare(
+      `SELECT id, guild_id as guildId, channel_id as channelId, owner_id as ownerId, type, status,
+              created_at as createdAt, closed_at as closedAt, closed_by as closedBy, transcript_url as transcriptUrl
+       FROM tickets WHERE channel_id = ?`,
+    )
+    .get(channelId) as TicketRecord | undefined;
+  return row ? mapTicketRow(row) : null;
+}
+
+export function countOpenTicketsForUser(guildId: string, ownerId: string): number {
+  const row = getDb()
+    .prepare("SELECT COUNT(*) as count FROM tickets WHERE guild_id = ? AND owner_id = ? AND status = 'open'")
+    .get(guildId, ownerId) as { count: number };
+  return row.count;
+}
+
+export function listTicketsForGuild(guildId: string, status?: TicketStatus): TicketRecord[] {
+  const rows = status
+    ? getDb()
+        .prepare(
+          `SELECT id, guild_id as guildId, channel_id as channelId, owner_id as ownerId, type, status,
+                  created_at as createdAt, closed_at as closedAt, closed_by as closedBy, transcript_url as transcriptUrl
+           FROM tickets WHERE guild_id = ? AND status = ? ORDER BY created_at DESC`,
+        )
+        .all(guildId, status)
+    : getDb()
+        .prepare(
+          `SELECT id, guild_id as guildId, channel_id as channelId, owner_id as ownerId, type, status,
+                  created_at as createdAt, closed_at as closedAt, closed_by as closedBy, transcript_url as transcriptUrl
+           FROM tickets WHERE guild_id = ? ORDER BY created_at DESC`,
+        )
+        .all(guildId);
+  return rows as unknown as TicketRecord[];
+}
+
+export function markTicketClosed(channelId: string, closedBy: string): void {
+  getDb()
+    .prepare("UPDATE tickets SET status = 'closed', closed_at = ?, closed_by = ? WHERE channel_id = ?")
+    .run(now(), closedBy, channelId);
+}
+
+export function markTicketReopened(channelId: string): void {
+  getDb()
+    .prepare("UPDATE tickets SET status = 'open', closed_at = NULL, closed_by = NULL WHERE channel_id = ?")
+    .run(channelId);
+}
+
+export function setTicketTranscriptUrl(channelId: string, url: string): void {
+  getDb().prepare("UPDATE tickets SET transcript_url = ? WHERE channel_id = ?").run(url, channelId);
+}
+
+export function deleteTicketRecord(channelId: string): void {
+  getDb().prepare("DELETE FROM tickets WHERE channel_id = ?").run(channelId);
+}
+
+// ---------------------------------------------------------------------
+// Log Settings (framework only — see src/logging)
+// ---------------------------------------------------------------------
+export interface LogSettings {
+  guildId: string;
+  channelId: string | null;
+  enabledEvents: string[];
+  updatedAt: number;
+}
+
+export function getLogSettings(guildId: string): LogSettings | null {
+  const row = getDb()
+    .prepare("SELECT guild_id as guildId, channel_id as channelId, enabled_events as enabledEvents, updated_at as updatedAt FROM log_settings WHERE guild_id = ?")
+    .get(guildId) as (Omit<LogSettings, "enabledEvents"> & { enabledEvents: string }) | undefined;
+  if (!row) return null;
+
+  let enabledEvents: string[] = [];
+  try {
+    enabledEvents = JSON.parse(row.enabledEvents);
+  } catch {
+    enabledEvents = [];
+  }
+
+  return { ...row, enabledEvents };
+}
+
+export function upsertLogSettings(guildId: string, patch: Partial<Pick<LogSettings, "channelId" | "enabledEvents">>): LogSettings {
+  const current = getLogSettings(guildId) ?? { guildId, channelId: null, enabledEvents: [], updatedAt: 0 };
+  const merged = { ...current, ...patch, updatedAt: now() };
+
+  getDb()
+    .prepare(
+      `INSERT INTO log_settings (guild_id, channel_id, enabled_events, updated_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(guild_id) DO UPDATE SET channel_id = excluded.channel_id, enabled_events = excluded.enabled_events, updated_at = excluded.updated_at`,
+    )
+    .run(guildId, merged.channelId, JSON.stringify(merged.enabledEvents), merged.updatedAt);
+
+  return merged;
+}
+
+// ---------------------------------------------------------------------
+// Reaction Roles
+// ---------------------------------------------------------------------
+export interface ReactionRole {
+  id: number;
+  guildId: string;
+  messageId: string;
+  channelId: string;
+  emoji: string;
+  roleId: string;
+  createdAt: number;
+}
+
+export function listReactionRoles(guildId: string): ReactionRole[] {
+  return getDb()
+    .prepare(
+      "SELECT id, guild_id as guildId, message_id as messageId, channel_id as channelId, emoji, role_id as roleId, created_at as createdAt FROM reaction_roles WHERE guild_id = ?",
+    )
+    .all(guildId) as unknown as ReactionRole[];
+}
+
+export function getReactionRole(messageId: string, emoji: string): ReactionRole | null {
+  const row = getDb()
+    .prepare(
+      "SELECT id, guild_id as guildId, message_id as messageId, channel_id as channelId, emoji, role_id as roleId, created_at as createdAt FROM reaction_roles WHERE message_id = ? AND emoji = ?",
+    )
+    .get(messageId, emoji) as unknown as ReactionRole | undefined;
+  return row ?? null;
+}
+
+export function addReactionRole(input: Omit<ReactionRole, "id" | "createdAt">): void {
+  getDb()
+    .prepare(
+      "INSERT INTO reaction_roles (guild_id, message_id, channel_id, emoji, role_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .run(input.guildId, input.messageId, input.channelId, input.emoji, input.roleId, now());
+}
+
+export function removeReactionRole(messageId: string, emoji: string): void {
+  getDb().prepare("DELETE FROM reaction_roles WHERE message_id = ? AND emoji = ?").run(messageId, emoji);
+}
+
+// ---------------------------------------------------------------------
+// Warning History
+// ---------------------------------------------------------------------
+export interface WarningRecord {
+  id: number;
+  guildId: string;
+  userId: string;
+  moderatorId: string;
+  reason: string;
+  createdAt: number;
+}
+
+export function addWarningRecord(input: Omit<WarningRecord, "id" | "createdAt">): WarningRecord {
+  const timestamp = now();
+  const result = getDb()
+    .prepare("INSERT INTO warning_history (guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?)")
+    .run(input.guildId, input.userId, input.moderatorId, input.reason, timestamp);
+
+  return { id: Number(result.lastInsertRowid), createdAt: timestamp, ...input };
+}
+
+export function listWarningRecords(guildId: string, userId: string): WarningRecord[] {
+  return getDb()
+    .prepare(
+      "SELECT id, guild_id as guildId, user_id as userId, moderator_id as moderatorId, reason, created_at as createdAt FROM warning_history WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC",
+    )
+    .all(guildId, userId) as unknown as WarningRecord[];
+}
+
+export function clearWarningRecords(guildId: string, userId: string): number {
+  const result = getDb().prepare("DELETE FROM warning_history WHERE guild_id = ? AND user_id = ?").run(guildId, userId);
+  return Number(result.changes);
+}
+
+// ---------------------------------------------------------------------
+// User Levels
+// ---------------------------------------------------------------------
+export interface UserLevel {
+  guildId: string;
+  userId: string;
+  xp: number;
+  level: number;
+  messages: number;
+  updatedAt: number;
+}
+
+export function getUserLevel(guildId: string, userId: string): UserLevel | null {
+  const row = getDb()
+    .prepare("SELECT guild_id as guildId, user_id as userId, xp, level, messages, updated_at as updatedAt FROM user_levels WHERE guild_id = ? AND user_id = ?")
+    .get(guildId, userId) as UserLevel | undefined;
+  return row ?? null;
+}
+
+export function upsertUserLevel(guildId: string, userId: string, patch: Partial<Pick<UserLevel, "xp" | "level" | "messages">>): UserLevel {
+  const current = getUserLevel(guildId, userId) ?? { guildId, userId, xp: 0, level: 0, messages: 0, updatedAt: 0 };
+  const merged = { ...current, ...patch, updatedAt: now() };
+
+  getDb()
+    .prepare(
+      `INSERT INTO user_levels (guild_id, user_id, xp, level, messages, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(guild_id, user_id) DO UPDATE SET xp = excluded.xp, level = excluded.level, messages = excluded.messages, updated_at = excluded.updated_at`,
+    )
+    .run(merged.guildId, merged.userId, merged.xp, merged.level, merged.messages, merged.updatedAt);
+
+  return merged;
+}
+
+// ---------------------------------------------------------------------
+// Giveaways
+// ---------------------------------------------------------------------
+export interface Giveaway {
+  id: number;
+  guildId: string;
+  channelId: string;
+  messageId: string | null;
+  prize: string;
+  winnerCount: number;
+  hostedBy: string;
+  endsAt: number;
+  ended: boolean;
+  createdAt: number;
+}
+
+export function createGiveaway(input: Omit<Giveaway, "id" | "ended" | "createdAt">): Giveaway {
+  const timestamp = now();
+  const result = getDb()
+    .prepare(
+      "INSERT INTO giveaways (guild_id, channel_id, message_id, prize, winner_count, hosted_by, ends_at, ended, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+    )
+    .run(input.guildId, input.channelId, input.messageId, input.prize, input.winnerCount, input.hostedBy, input.endsAt, timestamp);
+
+  return { id: Number(result.lastInsertRowid), ended: false, createdAt: timestamp, ...input };
+}
+
+export function listActiveGiveaways(guildId: string): Giveaway[] {
+  const rows = getDb()
+    .prepare(
+      "SELECT id, guild_id as guildId, channel_id as channelId, message_id as messageId, prize, winner_count as winnerCount, hosted_by as hostedBy, ends_at as endsAt, ended, created_at as createdAt FROM giveaways WHERE guild_id = ? AND ended = 0",
+    )
+    .all(guildId) as (Omit<Giveaway, "ended"> & { ended: number })[];
+  return rows.map((row) => ({ ...row, ended: Boolean(row.ended) }));
+}
+
+export function endGiveaway(id: number): void {
+  getDb().prepare("UPDATE giveaways SET ended = 1 WHERE id = ?").run(id);
+}
+
+// ---------------------------------------------------------------------
+// Suggestions
+// ---------------------------------------------------------------------
+export interface Suggestion {
+  id: number;
+  guildId: string;
+  channelId: string;
+  messageId: string | null;
+  userId: string;
+  content: string;
+  status: string;
+  createdAt: number;
+}
+
+export function createSuggestion(input: Omit<Suggestion, "id" | "status" | "createdAt">): Suggestion {
+  const timestamp = now();
+  const result = getDb()
+    .prepare("INSERT INTO suggestions (guild_id, channel_id, message_id, user_id, content, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)")
+    .run(input.guildId, input.channelId, input.messageId, input.userId, input.content, timestamp);
+
+  return { id: Number(result.lastInsertRowid), status: "pending", createdAt: timestamp, ...input };
+}
+
+export function listSuggestions(guildId: string): Suggestion[] {
+  return getDb()
+    .prepare(
+      "SELECT id, guild_id as guildId, channel_id as channelId, message_id as messageId, user_id as userId, content, status, created_at as createdAt FROM suggestions WHERE guild_id = ? ORDER BY created_at DESC",
+    )
+    .all(guildId) as unknown as Suggestion[];
+}
+
+export function updateSuggestionStatus(id: number, status: string): void {
+  getDb().prepare("UPDATE suggestions SET status = ? WHERE id = ?").run(status, id);
+}
+
+// ---------------------------------------------------------------------
+// Bot Configuration (global key/value store)
+// ---------------------------------------------------------------------
+export function getConfigValue(key: string): string | null {
+  const row = getDb().prepare("SELECT value FROM bot_configuration WHERE key = ?").get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setConfigValue(key: string, value: string): void {
+  getDb()
+    .prepare(
+      `INSERT INTO bot_configuration (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    )
+    .run(key, value, now());
+}
+
+// ---------------------------------------------------------------------
+// Aggregate guild config (used by /config view, export, import, reset)
+// ---------------------------------------------------------------------
+export interface FullGuildConfig {
+  guildSettings: Omit<GuildSettings, "guildId"> | null;
+  welcome: Omit<WelcomeSettings, "guildId"> | null;
+  goodbye: Omit<GoodbyeSettings, "guildId"> | null;
+  verification: Omit<VerificationSettings, "guildId"> | null;
+  tickets: Omit<TicketSettings, "guildId"> | null;
+  logging: Omit<LogSettings, "guildId"> | null;
+}
+
+export function getFullGuildConfig(guildId: string): FullGuildConfig {
+  const strip = <T extends { guildId: string }>(row: T | null): Omit<T, "guildId"> | null => {
+    if (!row) return null;
+    const { guildId: _guildId, ...rest } = row;
+    return rest;
+  };
+
+  return {
+    guildSettings: strip(getGuildSettings(guildId)),
+    welcome: strip(getWelcomeSettings(guildId)),
+    goodbye: strip(getGoodbyeSettings(guildId)),
+    verification: strip(getVerificationSettings(guildId)),
+    tickets: strip(getTicketSettings(guildId)),
+    logging: strip(getLogSettings(guildId)),
+  };
+}
+
+const GUILD_SCOPED_TABLES = [
+  "guild_settings",
+  "welcome_settings",
+  "goodbye_settings",
+  "verification_settings",
+  "ticket_settings",
+  "tickets",
+  "log_settings",
+  "reaction_roles",
+  "warning_history",
+  "user_levels",
+  "giveaways",
+  "suggestions",
+] as const;
+
+/** Deletes every row for this guild across all guild-scoped tables. */
+export function resetGuildConfig(guildId: string): void {
+  const db = getDb();
+  for (const table of GUILD_SCOPED_TABLES) {
+    db.prepare(`DELETE FROM ${table} WHERE guild_id = ?`).run(guildId);
+  }
+}
+
+/**
+ * Imports a previously exported config object. Unknown/malformed
+ * sections are skipped rather than throwing, so a partially-edited
+ * export file can still be imported safely.
+ */
+export function importGuildConfig(guildId: string, data: Partial<FullGuildConfig>): void {
+  ensureGuildSettings(guildId);
+
+  if (data.welcome && typeof data.welcome === "object") {
+    upsertWelcomeSettings(guildId, {
+      enabled: Boolean(data.welcome.enabled),
+      channelId: data.welcome.channelId ?? null,
+      message: data.welcome.message ?? null,
+      embedEnabled: data.welcome.embedEnabled ?? true,
+      imageEnabled: Boolean(data.welcome.imageEnabled),
+      title: data.welcome.title ?? null,
+      description: data.welcome.description ?? null,
+      autoRoleId: data.welcome.autoRoleId ?? null,
+      dmEnabled: Boolean(data.welcome.dmEnabled),
+    });
+  }
+  if (data.goodbye && typeof data.goodbye === "object") {
+    upsertGoodbyeSettings(guildId, {
+      enabled: Boolean(data.goodbye.enabled),
+      channelId: data.goodbye.channelId ?? null,
+      message: data.goodbye.message ?? null,
+      embedEnabled: data.goodbye.embedEnabled ?? true,
+      imageEnabled: Boolean(data.goodbye.imageEnabled),
+      title: data.goodbye.title ?? null,
+      description: data.goodbye.description ?? null,
+      dmEnabled: Boolean(data.goodbye.dmEnabled),
+    });
+  }
+  if (data.verification && typeof data.verification === "object") {
+    upsertVerificationSettings(guildId, {
+      enabled: Boolean(data.verification.enabled),
+      channelId: data.verification.channelId ?? null,
+      roleId: data.verification.roleId ?? null,
+      message: data.verification.message ?? null,
+    });
+  }
+  if (data.tickets && typeof data.tickets === "object") {
+    upsertTicketSettings(guildId, {
+      enabled: Boolean(data.tickets.enabled),
+      categoryId: data.tickets.categoryId ?? null,
+      supportRoleId: data.tickets.supportRoleId ?? null,
+      logChannelId: data.tickets.logChannelId ?? null,
+      transcriptChannelId: data.tickets.transcriptChannelId ?? null,
+      maxOpenTickets: data.tickets.maxOpenTickets ?? 0,
+      ticketNameFormat: data.tickets.ticketNameFormat ?? "ticket-{username}",
+    });
+  }
+  if (data.logging && typeof data.logging === "object") {
+    upsertLogSettings(guildId, {
+      channelId: data.logging.channelId ?? null,
+      enabledEvents: Array.isArray(data.logging.enabledEvents) ? data.logging.enabledEvents : [],
+    });
+  }
+}
